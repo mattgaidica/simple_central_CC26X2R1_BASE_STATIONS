@@ -79,10 +79,10 @@ static uint8_t ESLO_PREFIX[2] = { 0xEE, 0xEE };
 #define SC_ALL_EVENTS                        (SC_ICALL_EVT           | \
                                               SC_QUEUE_EVT)
 
-#define BASE_TIME_INTERVAL					1000 // milliseconds
+#define BASE_TIME_INTERVAL					1000 // milliseconds, keep at 1s
 
 // 1.28 sec unit. Range: 0x00-0xffff, where 0x00 is continuously scanning. See SimpleCentral_doDiscoverDevices()
-#define BASE_SCAN_PERIOD					1
+#define BASE_SCAN_PERIOD					3 // Matt change this to yoke power
 
 // Default connection interval when connecting to more then 8 connections and autoconnenct enabled
 #define DEFAULT_MULTICON_INTERVAL            200 //250 ms (200 frames of 1.25ms)
@@ -274,7 +274,7 @@ static GAP_Addr_Modes_t addrMode = DEFAULT_ADDRESS_MODE;
 static uint8 rpa[B_ADDR_LEN] = { 0 };
 
 // Auto connect Disabled/Enabled {0 - Disabled, 1- Group A , 2-Group B, ...}
-uint8_t autoConnect = AUTOCONNECT_GROUP_A; //AUTOCONNECT_DISABLE;
+uint8_t autoConnect = AUTOCONNECT_DISABLE; //AUTOCONNECT_DISABLE; AUTOCONNECT_GROUP_A
 
 //AutoConnect Group list
 static osal_list_list groupList;
@@ -769,64 +769,30 @@ static void SimpleCentral_processAppMsg(scEvt_t *pMsg) {
 
 	case SC_EVT_ADV_REPORT: {
 		GapScan_Evt_AdvRpt_t *pAdvRpt = (GapScan_Evt_AdvRpt_t*) (pMsg->pData);
-		//Auto connect is enabled
-//		if (autoConnect) {
-//			if (numGroupMembers == MAX_NUM_BLE_CONNS) {
-//				GapScan_disable("");
-//				break;
-//			}
-//			//Check if advertiser is part of the group
-//			if (SimpleCentral_isMember(pAdvRpt->pData, acGroup,
-//			GROUP_NAME_LENGTH)) {
-//				groupListElem_t *tempMember;
-//				//Traverse list to search if advertiser already in list.
-//				for (tempMember = (groupListElem_t*) osal_list_head(&groupList);
-//						tempMember != NULL;
-//						tempMember = (groupListElem_t*) osal_list_next(
-//								(osal_list_elem*) tempMember)) {
-//					if (osal_memcmp((uint8_t*) tempMember->addr,
-//							(uint8_t*) pAdvRpt->addr, B_ADDR_LEN)) {
-//						break;
-//					}
-//				}
-//				//If tempMemer is NULL this means advertiser not in list.
-//				if (tempMember == NULL) {
-//					groupListElem_t *groupMember =
-//							(groupListElem_t*) ICall_malloc(
-//									sizeof(groupListElem_t));
-//					if (groupMember != NULL) {
-//						//Copy member's details into Member's list.
-//						osal_memcpy((uint8_t*) groupMember->addr,
-//								(uint8_t*) pAdvRpt->addr, B_ADDR_LEN);
-//						groupMember->addrType = pAdvRpt->addrType;
-//						groupMember->status = GROUP_MEMBER_INITIALIZED;
-//						groupMember->connHandle =
-//						GROUP_INITIALIZED_CONNECTION_HANDLE;
-//						//Add group member into list.
-//						osal_list_putHead(&groupList,
-//								(osal_list_elem*) groupMember);
-//						numGroupMembers++;
-//					} else {
-////						Display_printf(dispHandle, SC_ROW_AC, 0,
-////								"AutoConnect: Allocation failed!");
-//						break;
-//					}
-//				}
-//			}
-//		}
 
 		if (SimpleCentral_findSvcUuid(TIME_SERVICE_UUID, pAdvRpt->pData,
 				pAdvRpt->dataLen)) {
-			SimpleCentral_addScanInfo(pAdvRpt->addr, pAdvRpt->addrType);
-			SimpleCentral_doSelectConn(0);
-			SimpleCentral_doConnect(0);
+			uint16_t timeLoc;
+			for (timeLoc = 0; timeLoc < pAdvRpt->dataLen; timeLoc ++) {
+				if (pAdvRpt->pData[timeLoc] == 0x61) {
+					break;
+				}
+			}
+			uint8_t localName[4];
+			localName[0] = pAdvRpt->pData[timeLoc-3];
+			localName[1] = pAdvRpt->pData[timeLoc-2];
+			localName[2] = pAdvRpt->pData[timeLoc-1];
+			localName[3] = pAdvRpt->pData[timeLoc];
+			memcpy(&curTime,localName,sizeof(curTime));
+			SimpleCentral_enqueueMsg(ESLO_TIME_FOUND, 0, NULL);
+//			SimpleCentral_addScanInfo(pAdvRpt->addr, pAdvRpt->addrType);
+//			SimpleCentral_doSelectConn(0); // this triggers GAP_LINK_ESTABLISHED_EVENT and add connInfo
+//			SimpleCentral_doConnect(0); // this calls GapInit_connect()
 		}
 
 		// Matt
 		if (memcmp(&ESLO_PREFIX, &pAdvRpt->addr[4], 2 * sizeof(uint8_t)) == 0) {
 			ESLO_LogAdvertisement(pAdvRpt);
-//			status = GapInit_connect(pAdvRpt->addrType & MASK_ADDRTYPE_ID,
-//					pAdvRpt->addr, DEFAULT_INIT_PHY, 0);
 		}
 		// Free report payload data
 		if (pAdvRpt->pData != NULL) {
@@ -1174,13 +1140,11 @@ static void SimpleCentral_processGapMsg(gapEventHdr_t *pMsg) {
 //      Display_printf(dispHandle, SC_ROW_NON_CONN, 0, "Connected to %s", pStrAddr);
 //      Display_printf(dispHandle, SC_ROW_NUM_CONN, 0, "Num Conns: %d", numConn);
 
-		GAPBondMgr_GetParameter(GAPBOND_PAIRING_MODE, &pairMode);
+		GAPBondMgr_GetParameter(GAPBOND_PAIRING_MODE, &pairMode); // was GAPBOND_PAIRING_MODE, GAPBOND_PAIRING_MODE_NO_PAIRING
 
 		if ((autoConnect) && (pairMode != GAPBOND_PAIRING_MODE_INITIATE)) {
-//			SimpleCentral_autoConnect();
+			SimpleCentral_autoConnect();
 		}
-		// Matt
-//		SimpleCentral_doGattRead(NULL);
 
 		break;
 	}
@@ -1368,8 +1332,7 @@ static void SimpleCentral_processGATTMsg(gattMsgEvent_t *pMsg) {
 			SimpleCentral_processGATTDiscEvent(pMsg);
 		}
 	} // else - in case a GATT message came after a connection has dropped, ignore it.
-
-	// Needed only for ATT Protocol messages
+	  // Needed only for ATT Protocol messages
 	GATT_bm_free(&pMsg->msg, pMsg->method);
 }
 
@@ -1567,7 +1530,6 @@ static void SimpleCentral_processPasscode(scPasscodeData_t *pData) {
  */
 static void SimpleCentral_startSvcDiscovery(void) {
 	attExchangeMTUReq_t req;
-
 	// Initialize cached handles
 	svcStartHdl = svcEndHdl = 0;
 
@@ -1578,7 +1540,7 @@ static void SimpleCentral_startSvcDiscovery(void) {
 
 	// ATT MTU size should be set to the minimum of the Client Rx MTU
 	// and Server Rx MTU values
-	VOID GATT_ExchangeMTU(scConnHandle, &req, selfEntity);
+	VOID GATT_ExchangeMTU(scConnHandle, &req, selfEntity); // Matt 0x14 is not connected
 }
 
 /*********************************************************************
@@ -1659,7 +1621,6 @@ static void SimpleCentral_processGATTDiscEvent(gattMsgEvent_t *pMsg) {
 			status = GATT_ReadCharValue(scConnHandle, &req, selfEntity);
 			SimpleCentral_enqueueMsg(ESLO_TIME_FOUND, 0, NULL); // assume value will write, blink LEDs
 		}
-
 		discState = BLE_DISC_STATE_IDLE;
 	}
 }
@@ -2178,7 +2139,7 @@ bool SimpleCentral_doStopDiscovering(uint8_t index) {
 bool SimpleCentral_doConnect(uint8_t index) {
 #if (DEFAULT_DEV_DISC_BY_SVC_UUID == TRUE)
 	GapInit_connect(scanList[index].addrType & MASK_ADDRTYPE_ID,
-			scanList[index].addr, DEFAULT_INIT_PHY, 0);
+			scanList[index].addr, DEFAULT_INIT_PHY, 0); // Matt: this returns 0x00 SUCCESS
 #else // !DEFAULT_DEV_DISC_BY_SVC_UUID
 	GapScan_Evt_AdvRpt_t advRpt;
 
