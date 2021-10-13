@@ -2,16 +2,6 @@
 // https://dev.ti.com/tirex/explore/node?node=AD4sGbaamTCyn0DvZgBAsg__krol.2c__LATEST
 /*
  *  open iTerm, find device >> ls /dev/tty.*
- *  >> cd ~/Downloads
- *  clear contents of screenlog.0
- *  debug program to mainThread()
- *  1: screen -L /dev/tty.usbmodemL1100NA51 115200
- *  2: screen -L /dev/tty.usbmodemL1100NM51 115200
- *  3: screen -L /dev/tty.usbmodemL1100MPN1 115200
- *  4: screen -L /dev/tty.usbmodemL1100LNK1 115200
- *  5: screen -L /dev/tty.usbmodemL1100LR91 115200
- *  play program until end
- *  close iTerm with ctrl+a,k
  */
 
 /*
@@ -82,7 +72,7 @@ static uint8_t ESLO_PREFIX[2] = { 0xEE, 0xEE };
 #define BASE_TIME_INTERVAL					1000 // milliseconds, keep at 1s
 
 // 1.28 sec unit. Range: 0x00-0xffff, where 0x00 is continuously scanning. See SimpleCentral_doDiscoverDevices()
-#define BASE_SCAN_PERIOD					3 // Matt change this to yoke power
+#define BASE_SCAN_PERIOD					1 // Matt change this to yoke power
 
 // Default connection interval when connecting to more then 8 connections and autoconnenct enabled
 #define DEFAULT_MULTICON_INTERVAL            200 //250 ms (200 frames of 1.25ms)
