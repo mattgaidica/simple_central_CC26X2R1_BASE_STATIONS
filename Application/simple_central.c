@@ -764,7 +764,7 @@ static void SimpleCentral_processAppMsg(scEvt_t *pMsg) {
 				pAdvRpt->dataLen)) {
 			uint16_t timeLoc;
 			for (timeLoc = 0; timeLoc < pAdvRpt->dataLen; timeLoc ++) {
-				if (pAdvRpt->pData[timeLoc] == 0x61) { // !! not accurate for future dates < Sunday, February 6, 2022 5:06:08 PM, instead look for 0xEFFE (Svc uuid)
+				if (pAdvRpt->pData[timeLoc] == 0x61) { // !! this does not work, see Juxta for implementation
 					break;
 				}
 			}
